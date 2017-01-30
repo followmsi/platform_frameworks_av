@@ -5396,6 +5396,23 @@ void ACodec::onOutputFormatChanged(sp<const AMessage> expectedFormat) {
     }
 }
 
+void ACodec::addKeyFormatChangesToRenderBufferNotification(sp<AMessage> &notify) {
+    AString mime;
+    CHECK(mOutputFormat->findString("mime", &mime));
+    if (mime == MEDIA_MIMETYPE_VIDEO_RAW && mNativeWindow != NULL) {
+        // notify renderer of the crop change and dataspace change
+        // NOTE: native window uses extended right-bottom coordinate
+        int32_t left, top, right, bottom;
+        if (mOutputFormat->findRect("crop", &left, &top, &right, &bottom)) {
+            notify->setRect("crop", left, top, right + 1, bottom + 1);
+        }
+        int32_t dataSpace;
+        if (mOutputFormat->findInt32("android._dataspace", &dataSpace)) {
+            notify->setInt32("dataspace", dataSpace);
+        }
+    }
+}
+
 void ACodec::sendFormatChange() {
     AString mime;
     CHECK(mOutputFormat->findString("mime", &mime));
@@ -7939,6 +7956,13 @@ bool ACodec::OutputPortSettingsChangedState::onOMXEvent(
                     return false;
                 }
 
+                // Resolution is about to change
+                // Make sure the decoder knows
+                sp<AMessage> reply = new AMessage(kWhatOutputBufferDrained, mCodec);
+                mCodec->onOutputFormatChanged();
+                mCodec->addKeyFormatChangesToRenderBufferNotification(reply);
+                mCodec->sendFormatChange();
+
                 ALOGV("[%s] Output port now reenabled.", mCodec->mComponentName.c_str());
 
                 if (mCodec->mExecutingState->active()) {
@@ -7952,6 +7976,13 @@ bool ACodec::OutputPortSettingsChangedState::onOMXEvent(
 
             return false;
         }
+
+        case OMX_EventPortSettingsChanged:
+            // Exynos OMX wants to share its' output crop
+            // For some reason trying to handle this here doesn't do anything
+            // We'll do it right before transitioning to ExecutingState
+            return true;
+        break;
 
         default:
             return BaseState::onOMXEvent(event, data1, data2);
