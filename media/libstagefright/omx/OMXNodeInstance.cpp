@@ -377,7 +377,11 @@ OMXNodeInstance::OMXNodeInstance(
     mGraphicBufferEnabled[0] = false;
     mGraphicBufferEnabled[1] = false;
     mIsSecure = AString(name).endsWith(".secure");
+#ifdef QCOM_BSP_LEGACY
+    mLegacyAdaptiveExperiment = true;
+#else
     mLegacyAdaptiveExperiment = ADebug::isExperimentEnabled("legacy-adaptive");
+#endif
 }
 
 OMXNodeInstance::~OMXNodeInstance() {
@@ -500,11 +504,12 @@ status_t OMXNodeInstance::freeNode() {
             break;
     }
 
-    Mutex::Autolock _l(mLock);
-
     if (mActiveBuffers.size() > 0) {
         freeActiveBuffers();
     }
+
+    Mutex::Autolock _l(mLock);
+
     status_t err = mOwner->freeNode(this);
 
     mDispatcher.clear();

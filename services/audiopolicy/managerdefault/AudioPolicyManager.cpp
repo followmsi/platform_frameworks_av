@@ -5033,7 +5033,7 @@ void AudioPolicyManager::checkOutputForAttributes(const audio_attributes_t &attr
 
     DeviceVector oldDevices = mEngine->getOutputDevicesForAttributes(attr, 0, true /*fromCache*/);
     DeviceVector newDevices = mEngine->getOutputDevicesForAttributes(attr, 0, false /*fromCache*/);
-    SortedVector<audio_io_handle_t> srcOutputs = getOutputsForDevices(oldDevices, mOutputs);
+    SortedVector<audio_io_handle_t> srcOutputs = getOutputsForDevices(oldDevices, mPreviousOutputs);
     SortedVector<audio_io_handle_t> dstOutputs = getOutputsForDevices(newDevices, mOutputs);
 
     // also take into account external policy-related changes: add all outputs which are
@@ -5535,7 +5535,10 @@ uint32_t AudioPolicyManager::setOutputDevices(const sp<SwAudioOutputDescriptor>&
             patchBuilder.addSink(filteredDevice);
         }
 
-        installPatch(__func__, patchHandle, outputDesc.get(), patchBuilder.patch(), delayMs);
+        // Add half reported latency to delayMs when muteWaitMs is null in order
+        // to avoid disordered sequence of muting volume and changing devices.
+        installPatch(__func__, patchHandle, outputDesc.get(), patchBuilder.patch(),
+                muteWaitMs == 0 ? (delayMs + (outputDesc->latency() / 2)) : delayMs);
     }
 
     // update stream volumes according to new device
